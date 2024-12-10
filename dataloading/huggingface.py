@@ -5,7 +5,7 @@ import csv
 
 path = ""
 
-login(token="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")
+login(token="")
 
 model_id = "meta-llama/Llama-3.1-8B-Instruct"
 
