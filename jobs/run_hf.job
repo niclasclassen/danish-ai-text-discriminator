@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#SBATCH --job-name=run_hf    # Job name
+#SBATCH --output=run_hf.%j.out      # Name of output file (%j expands to jobId)
+#SBATCH --cpus-per-task=1        # Schedule 8 cores (includes hyperthreading)
+#SBATCH --gres=gpu               # Schedule a GPU, or more with gpu:2 etc
+#SBATCH --time=03:00:00          # Run time (hh:mm:ss) - run for one hour max
+## SBATCH --partition=acltr    # Run on GPU queue
+
+cd ../dataloading
+
+singularity exec  --nv /opt/itu/containers/pytorchtransformers/pytorch-24.07-py3-transformers.sif python huggingface.py
