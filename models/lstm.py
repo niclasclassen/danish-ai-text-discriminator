@@ -16,10 +16,10 @@ class LSTMClassifier(nn.Module):
     def __init__(self, vocab_size, emb_layer, hidden_dim, output_dim, n_layers, dropout, pos_emb=None):
         super(LSTMClassifier, self).__init__()
         #self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        emb_dim = emb_layer.weight.shape
+        emb_dim = emb_layer
         lstm_dim = hidden_dim
         self.embedding = emb_layer
-        self.lstm = nn.LSTM(emb_dim[1], hidden_dim, num_layers=n_layers, batch_first=True, dropout=dropout, bidirectional=True)
+        self.lstm = nn.LSTM(emb_dim, hidden_dim, num_layers=n_layers, batch_first=True, dropout=dropout, bidirectional=True)
         
         if pos_emb:
             self.pos_emb = pos_emb
