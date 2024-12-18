@@ -1,4 +1,3 @@
-# TODO
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,6 +6,9 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from collections import Counter
 from itertools import chain
+
+w2v_path = "../embeddings/da/w2v.bin"
+
 ### Very basic LSTM model for text classification
 class TextDataset(Dataset):
     def __init__(self, texts, labels, tokenizer, max_len):
@@ -38,6 +40,11 @@ data['generated'] = 0
 # Tokenize text
 def simple_tokenizer(text):
     return text.lower().split()
+
+# Pretrained word embeddings
+w2v = KeyedVectors.load_word2vec_format(w2v_path, binary=True, unicode_errors='ignore')
+embedding = nn.Embedding.from_pretrained(w2v.vectors)
+word_to_index = {word: idx for idx, word in enumerate(w2v.index_to_key)}
 
 # Tokenize and build vocabulary
 all_tokens = list(chain.from_iterable(simple_tokenizer(text) for text in data['text']))
