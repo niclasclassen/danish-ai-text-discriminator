@@ -75,7 +75,7 @@ def train():
     n_layers = 2
     dropout = 0.5
 
-    model = LSTMClassifier(vocab_size, embedding_dim, hidden_dim, output_dim, n_layers, dropout)
+    model = LSTMClassifier(vocab_size, embedding, hidden_dim, output_dim, n_layers, dropout)
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
