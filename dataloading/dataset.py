@@ -10,11 +10,12 @@ from itertools import chain
 from gensim.models import KeyedVectors
 
 class TextDataset(Dataset):
-    def __init__(self, texts, labels, tokenizer, max_len):
+    def __init__(self, texts, labels, tokenizer, max_len, pad_id):
         self.texts = texts
         self.labels = labels
         self.tokenizer = tokenizer
         self.max_len = max_len
+        self.pad_id = pad_id
 
     def __len__(self):
         return len(self.texts)
@@ -24,7 +25,7 @@ class TextDataset(Dataset):
         label = self.labels[idx]
 
         tokens = self.tokenizer(text)
-        padded_tokens = tokens + [0] * (self.max_len - len(tokens)) if len(tokens) < self.max_len else tokens[:self.max_len]
+        padded_tokens = tokens + [self.pad_id] * (self.max_len - len(tokens)) if len(tokens) < self.max_len else tokens[:self.max_len]
 
         return {
             'input': torch.tensor(padded_tokens, dtype=torch.long),

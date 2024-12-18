@@ -17,9 +17,11 @@ def get_embs():
     w2v = KeyedVectors.load_word2vec_format(w2v_path, binary=True, unicode_errors='ignore')
     unk_vector = np.random.uniform(-0.01, 0.01, w2v.vector_size)
     unk_id = w2v.add_vector('<UNK>', unk_vector)
+    padding_vector = np.random.uniform(-0.01, 0.01, w2v.vector_size)
+    pad_id = w2v.add_vector('<PAD>', padding_vector)
     embedding = nn.Embedding.from_pretrained(torch.FloatTensor(w2v.vectors))
     vocab = {word: idx for idx, word in enumerate(w2v.index_to_key)}
-    return embedding, vocab, unk_id
+    return embedding, vocab, unk_id, pad_id
 
 def get_pos_embs(df):
     # Load the Danish spaCy model
@@ -39,18 +41,17 @@ def get_pos_embs(df):
 
     # Iterate through rows and extract POS tags from both columns
     for _, row in df.iterrows():
-        unique_pos_tags = extract_unique_pos_tags(row['Rewritten Text'], unique_pos_tags)
-        unique_pos_tags = extract_unique_pos_tags(row['Combined Text'], unique_pos_tags)
+        unique_pos_tags = extract_unique_pos_tags(row['Text'], unique_pos_tags)
 
     # Convert the set to a sorted list
     unique_pos_tags_list = sorted(list(unique_pos_tags))
 
     # Print the result
-    print("Unique POS Tags:", unique_pos_tags_list)
+    #print("Unique POS Tags:", unique_pos_tags_list)
 
     # Define standard POS tag list
     standard_pos_tags = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 
-                        'PRON', 'PROPN', 'PUNCT', 'SCONJ', 'SPACE', 'SYM', 'VERB', 'X']
+                        'PRON', 'PROPN', 'PUNCT', 'SCONJ', 'SPACE', 'SYM', 'VERB', 'X', 'PAD']
 
     # Create a dictionary with indices for standard POS tags
     pos_tag_dict = {tag: idx for idx, tag in enumerate(standard_pos_tags)}
@@ -58,9 +59,11 @@ def get_pos_embs(df):
     # One-Hot Encode POS tags
     one_hot_encoder = OneHotEncoder(categories=[standard_pos_tags], sparse_output=False)
     encoded_pos_tags = one_hot_encoder.fit_transform(np.array(unique_pos_tags_list).reshape(-1, 1))
+
+    print(encoded_pos_tags)
     embedding = nn.Embedding.from_pretrained(torch.FloatTensor(encoded_pos_tags))
 
     # Map POS tags to corresponding row indices in the embedding table
     pos_embedding_mapping = {tag: int(np.argmax(encoded_pos_tags[idx])) for idx, tag in enumerate(unique_pos_tags_list)}
     
-    return embedding, pos_embedding_mapping, len(standard_pos_tags)-1
+    return embedding, pos_embedding_mapping, len(standard_pos_tags)-2, len(standard_pos_tags)-1

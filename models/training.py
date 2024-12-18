@@ -1,3 +1,5 @@
+import sys
+sys.path.append("..")
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,6 +11,7 @@ from collections import Counter
 from itertools import chain
 from gensim.models import KeyedVectors
 
+from dataloading.dataset import TextDataset
 from embs import get_embs, get_pos_embs
 
 # Tokenize text
@@ -22,20 +25,24 @@ def tokenizer(text, vocab, unk_id):
 def load_data():
     #data = pd.read_csv("../reddit.csv") # Load the data
     data = pd.read_csv("../cleaned_final.csv")
-    #human_df = data[["Original Title", "Original Text"]]
-    #human_df["label"] = 0
-    #ai_df = data[["Rewritten Text"]]
-    #ai_df["label"] = 0
+    human_df = data[["Combined Text"]]
+    human_df["label"] = 0
+    ai_df = data[["Rewritten Text"]]
+    ai_df["label"] = 1
+    human_df = human_df.rename(columns={"Combined Text": "Text"})
+    ai_df = ai_df.rename(columns={"Rewritten Text": "Text"})
+    data = pd.concat([human_df, ai_df], ignore_index=True)
     return data
 
 def train():
     data = load_data()
-    embedding, vocab, unk_id = get_embs()
-    pos_embedding, pos_vocab, pos_unk_id = get_embs()
+    embedding, vocab, unk_id, pad_id = get_embs()
+    pos_embedding, pos_vocab, pos_unk_id, pos_pad_id = get_pos_embs(data)
+    max_len = 2000
 
-    max_len = 100
-    train_texts, test_texts, train_labels, test_labels = train_test_split(data['text'], data['generated'], test_size=0.2, random_state=42)
-    train_texts, val_texts, train_labels, val_labels = train_test_split(data['text'], data['generated'], test_size=0.2, random_state=42)
+    data = data.sample(frac=1).reset_index(drop=True)
+    train_texts, test_texts, train_labels, test_labels = train_test_split(data, test_size=0.2, random_state=42, stratify=data["label"])
+    train_texts, val_texts, train_labels, val_labels = train_test_split(data, test_size=0.2, random_state=42, stratify=data["label"])
 
     train_dataset = TextDataset(train_texts.tolist(), train_labels.tolist(), tokenizer, max_len)
     val_dataset = TextDataset(val_texts.tolist(), val_labels.tolist(), tokenizer, max_len)
