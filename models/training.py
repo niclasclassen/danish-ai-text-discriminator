@@ -12,15 +12,29 @@ from itertools import chain
 from gensim.models import KeyedVectors
 import pdb
 from dataloading.dataset import TextDataset
+from models.lstm import LSTMClassifier
 from embs import get_embs, get_pos_embs
 
-# Tokenize text
-def simple_tokenizer(text):
-    return text.lower().split()
+class Tokenizer:
+    def __init__(self, vocab, unk_id, pos_vocab, pos_unk_id, pos_pad_id, max_len):
+        self.vocab = vocab
+        self.unk_id = unk_id
+        self.pos_vocab = pos_vocab
+        self.pos_unk_id = pos_unk_id
+        self.pos_pad_id = pos_pad_id
+        self.max_len = max_len
 
-# Map words to integers
-def tokenizer(text, vocab, unk_id):
-    return [vocab.get(word, unk_id) for word in simple_tokenizer(text)]
+    # Tokenize text
+    def simple_tokenizer(self, text):
+        return text.lower().split()
+
+    def tokenize(self, text):
+        tokens = self.simple_tokenizer(text)
+        word_ids = [0] + [self.vocab.get(word, self.unk_id) for word in tokens]
+        word_ids = word_ids + [0 for _ in range(self.max_len - len(tokens) - 1)]
+        pos_ids = [self.pos_pad_id] + [self.pos_vocab.get(word, self.pos_unk_id) for word in tokens]
+        pos_ids = pos_ids + [self.pos_pad_id for _ in range(self.max_len - len(tokens) - 1)]
+        return word_ids, pos_ids
 
 def load_data():
     #data = pd.read_csv("../reddit.csv") # Load the data
@@ -38,20 +52,16 @@ def train():
     data = load_data()
     embedding, vocab, unk_id, pad_id = get_embs()
     pos_embedding, pos_vocab, pos_unk_id, pos_pad_id = get_pos_embs(data)
-    max_len = 2000
+    max_len = 1000
+    tokenizer = Tokenizer(vocab, unk_id, pos_vocab, pos_unk_id, pos_pad_id, max_len)
 
     data = data.sample(frac=1).reset_index(drop=True)
-    X = data["Text"]
-    y = data["label"]
-    pdb.set_trace()
-    train_texts, test_texts, train_labels, test_labels = train_test_split(X,y, test_size=0.2, random_state=42, stratify=data["label"])
-    train_texts, val_texts, train_labels, val_labels = train_test_split(X,y, test_size=0.2, random_state=42, stratify=data["label"])
+    train_texts, test_texts, train_labels, test_labels = train_test_split(data["Text"], data["label"], test_size=0.2, random_state=42, stratify=data["label"])    
+    train_texts, val_texts, train_labels, val_labels = train_test_split(train_texts, train_labels, test_size=0.2, random_state=42, stratify=train_labels)
 
-    train_dataset = TextDataset(train_texts.tolist(), train_labels.tolist(), tokenizer, max_len, pad_id)
-    val_dataset = TextDataset(val_texts.tolist(), val_labels.tolist(), tokenizer, max_len, pad_id)
-    test_dataset = TextDataset(test_texts.tolist(), test_labels.tolist(), tokenizer, max_len, pad_id)
-
-    return train_dataset, val_dataset, test_dataset
+    train_dataset = TextDataset(train_texts.tolist(), train_labels.tolist(), tokenizer)
+    val_dataset = TextDataset(val_texts.tolist(), val_labels.tolist(), tokenizer)
+    test_dataset = TextDataset(test_texts.tolist(), test_labels.tolist(), tokenizer)
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     val_loader = DataLoader(train_dataset, batch_size=32, shuffle=False)
