@@ -30,22 +30,24 @@ with open(data_path, "r", encoding="utf-8") as csv_file:
             break
         cnt += 1
         message = row["text"]
-        print("Message:")
-        print(message)
-
-        # message = "Hej, jeg hedder Frederik."
         messages = [
             {
                 "role": "system",
-                "content": "You are a Danish re-writing agent. You have to re-write the input to have the same meaning.",
+                "content": (
+                    "You are a Danish language assistant specialized in rewriting text. "
+                    "Your task is to rephrase the input text for clarity, maintaining the same meaning, "
+                    "tone, and context. The rewritten text should be roughly the same length as the input. "
+                    "Ensure that any links, hashtags, or formatting remain intact."
+                ),
             },
-            # {"role": "system", "content": "You are a pirate"},
             {
                 "role": "user",
-                "content": "Please, re-write the following text in danish for a reddit post and keep the links: \n\n"
-                + message,
+                "content": (
+                    "Please rephrase the following text in Danish for a Reddit post, "
+                    "ensuring the meaning, links, and approximate length are preserved:\n\n"
+                    + message
+                ),
             },
-            # {"role": "user", "content": "Hello, how are you?"}
         ]
         terminators = [
             pipeline.tokenizer.eos_token_id,
@@ -53,7 +55,7 @@ with open(data_path, "r", encoding="utf-8") as csv_file:
         ]
         outputs = pipeline(
             messages,
-            max_new_tokens=150,
+            max_new_tokens=300,
             eos_token_id=terminators,
             do_sample=True,
             temperature=0.6,

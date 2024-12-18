@@ -9,6 +9,7 @@ from collections import Counter
 from itertools import chain
 from gensim.models import KeyedVectors
 
+
 class TextDataset(Dataset):
     def __init__(self, texts, labels, tokenizer, max_len, pad_id):
         self.texts = texts
@@ -25,16 +26,24 @@ class TextDataset(Dataset):
         label = self.labels[idx]
 
         tokens = self.tokenizer(text)
-        padded_tokens = tokens + [self.pad_id] * (self.max_len - len(tokens)) if len(tokens) < self.max_len else tokens[:self.max_len]
+        length = len(tokens)
+
+        padded_tokens = (
+            tokens + [self.pad_id] * (self.max_len - len(tokens))
+            if len(tokens) < self.max_len
+            else tokens[: self.max_len]
+        )
 
         return {
-            'input': torch.tensor(padded_tokens, dtype=torch.long),
-            'label': torch.tensor(label, dtype=torch.float),
+            "input": torch.tensor(padded_tokens, dtype=torch.long),
+            "length": torch.tensor(length, dtype=torch.long),
+            "label": torch.tensor(label, dtype=torch.float),
         }
 
 
 def main():
     pass
+
 
 if __name__ == "__main__":
     main()
