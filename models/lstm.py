@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from collections import Counter
 from itertools import chain
+from gensim.models import KeyedVectors
 
 w2v_path = "../embeddings/da/w2v.bin"
 
@@ -32,7 +33,13 @@ class TextDataset(Dataset):
             'label': torch.tensor(label, dtype=torch.float),
         }
     
-data = pd.read_csv("../reddit.csv") # Load the data
+#data = pd.read_csv("../reddit.csv") # Load the data
+data = pd.read_csv("../rephrased_texts.csv")
+human_df = data[["Original Title", "Original Text"]]
+human_df["label"] = 0
+ai_df = data[["Rewritten Text"]]
+ai_df["label"] = 0
+
 # add a column "generated" to the dataframe (0 for real, 1 for generated) this we will probably just modify directly in the csv
 # so it can be removed when we do the actual training
 data['generated'] = 0
@@ -43,16 +50,18 @@ def simple_tokenizer(text):
 
 # Pretrained word embeddings
 w2v = KeyedVectors.load_word2vec_format(w2v_path, binary=True, unicode_errors='ignore')
+unk_vector = np.random.uniform(-0.01, 0.01, w2v.vector_size)
+unk_id = w2v.add_vector('<UNK>', unk_vector)
 embedding = nn.Embedding.from_pretrained(w2v.vectors)
-word_to_index = {word: idx for idx, word in enumerate(w2v.index_to_key)}
+vocab = {word: idx for idx, word in enumerate(w2v.index_to_key)}
 
 # Tokenize and build vocabulary
-all_tokens = list(chain.from_iterable(simple_tokenizer(text) for text in data['text']))
-vocab = {word: idx+1 for idx, (word, _) in enumerate(Counter(all_tokens).most_common())}
+#all_tokens = list(chain.from_iterable(simple_tokenizer(text) for text in data['text']))
+#vocab = {word: idx+1 for idx, (word, _) in enumerate(Counter(all_tokens).most_common())}
 
 # Map words to integers
 def tokenizer(text):
-    return [vocab.get(word, 0) for word in simple_tokenizer(text)]
+    return [vocab.get(word, unk_id) for word in simple_tokenizer(text)]
 
 ###############
 # Train model #
