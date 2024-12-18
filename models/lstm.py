@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from collections import Counter
 from itertools import chain
 from gensim.models import KeyedVectors
+from torch.nn.utils.rnn import pack_padded_sequence
 
 
 ### Very basic LSTM model for text classification
