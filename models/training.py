@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from collections import Counter
 from itertools import chain
 from gensim.models import KeyedVectors
-
+import pdb
 from dataloading.dataset import TextDataset
 from embs import get_embs, get_pos_embs
 
@@ -41,12 +41,15 @@ def train():
     max_len = 2000
 
     data = data.sample(frac=1).reset_index(drop=True)
-    train_texts, test_texts, train_labels, test_labels = train_test_split(data, test_size=0.2, random_state=42, stratify=data["label"])
-    train_texts, val_texts, train_labels, val_labels = train_test_split(data, test_size=0.2, random_state=42, stratify=data["label"])
+    X = data["Text"]
+    y = data["label"]
+    pdb.set_trace()
+    train_texts, test_texts, train_labels, test_labels = train_test_split(X,y, test_size=0.2, random_state=42, stratify=data["label"])
+    train_texts, val_texts, train_labels, val_labels = train_test_split(X,y, test_size=0.2, random_state=42, stratify=data["label"])
 
-    train_dataset = TextDataset(train_texts.tolist(), train_labels.tolist(), tokenizer, max_len)
-    val_dataset = TextDataset(val_texts.tolist(), val_labels.tolist(), tokenizer, max_len)
-    test_dataset = TextDataset(test_texts.tolist(), test_labels.tolist(), tokenizer, max_len)
+    train_dataset = TextDataset(train_texts.tolist(), train_labels.tolist(), tokenizer, max_len, pad_id)
+    val_dataset = TextDataset(val_texts.tolist(), val_labels.tolist(), tokenizer, max_len, pad_id)
+    test_dataset = TextDataset(test_texts.tolist(), test_labels.tolist(), tokenizer, max_len, pad_id)
 
     return train_dataset, val_dataset, test_dataset
 
