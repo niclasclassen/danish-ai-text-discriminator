@@ -15,6 +15,9 @@ from dataloading.dataset import TextDataset
 from models.lstm import LSTMClassifier
 from embs import get_embs, get_pos_embs
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print("IS CUDA?", torch.cuda.is_available(), flush=True)
+
 class Tokenizer:
     def __init__(self, vocab, unk_id, pos_vocab, pos_unk_id, pos_pad_id, max_len):
         self.vocab = vocab
@@ -30,6 +33,7 @@ class Tokenizer:
 
     def tokenize(self, text):
         tokens = self.simple_tokenizer(text)
+        tokens = tokens[:self.max_len]
         word_ids = [0] + [self.vocab.get(word, self.unk_id) for word in tokens]
         word_ids = word_ids + [0 for _ in range(self.max_len - len(tokens) - 1)]
         pos_ids = [self.pos_pad_id] + [self.pos_vocab.get(word, self.pos_unk_id) for word in tokens]
@@ -37,8 +41,9 @@ class Tokenizer:
         return word_ids, pos_ids
 
 def load_data():
-    #data = pd.read_csv("../reddit.csv") # Load the data
-    data = pd.read_csv("../cleaned_final.csv")
+    #data = pd.read_csv("../cleaned_final.csv")
+    #data = pd.read_csv("../cleaned_final_title_based.csv")
+    data = pd.read_csv("../combined_file.csv")
     human_df = data[["Combined Text"]]
     human_df["label"] = 0
     ai_df = data[["Rewritten Text"]]
@@ -50,9 +55,9 @@ def load_data():
 
 def train():
     data = load_data()
-    embedding, vocab, unk_id, pad_id = get_embs()
+    embedding, vocab, unk_id = get_embs()
     pos_embedding, pos_vocab, pos_unk_id, pos_pad_id = get_pos_embs(data)
-    max_len = 1000
+    max_len = 2000
     tokenizer = Tokenizer(vocab, unk_id, pos_vocab, pos_unk_id, pos_pad_id, max_len)
 
     data = data.sample(frac=1).reset_index(drop=True)
@@ -64,50 +69,105 @@ def train():
     test_dataset = TextDataset(test_texts.tolist(), test_labels.tolist(), tokenizer)
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(train_dataset, batch_size=32, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     #vocab_size = len(vocab) + 1  # Add 1 for padding index
     vocab_size = len(vocab)
-    embedding_dim = 128
-    hidden_dim = 64
+    #embedding_dim = 128
+
     output_dim = 1
-    n_layers = 2
-    dropout = 0.5
+    n_layers = 1
+    dropout = 0.3
+    #criterion = nn.BCELoss(reduction="sum")
+    pos_weight = torch.tensor([1/2]).to(device)
+    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="sum")
 
-    model = LSTMClassifier(vocab_size, embedding, hidden_dim, output_dim, n_layers, dropout)
-    criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    for hidden_dim in [16,32,64]:
+        for lr in [0.0001, 0.0005, 0.001]:
+            for pos_emb in [True, False]:
 
-    for epoch in range(10):
-        model.train()
-        for batch in train_loader:
-            inputs = batch['input']
-            labels = batch['label']
+                print("** PARAMETERS **", flush=True)
+                print("Hidden:", hidden_dim, flush=True)
+                print("LR:", lr, flush=True)
+                print("pos_emb:", pos_emb, flush=True)
+                
+                if pos_emb:
+                    model = LSTMClassifier(vocab_size, embedding, hidden_dim, output_dim, n_layers, dropout, pos=True, pos_emb=pos_embedding)
+                else:
+                    model = LSTMClassifier(vocab_size, embedding, hidden_dim, output_dim, n_layers, dropout, pos=False, pos_emb=pos_embedding)
+                model = model.to(device)
+                print(model)
 
-            optimizer.zero_grad()
-            outputs = model(inputs).squeeze()
+                optimizer = optim.Adam(model.parameters(), lr=lr)
 
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+                for epoch in range(100):
 
-        print(f'Epoch {epoch+1}, Loss: {loss.item()}')
+                    patience = 5
+                    min_val_loss = 0.0
+                    epoch_loss = 0.0
+                    epoch_val_loss = 0.0
+
+                    ## Train loss
+                    model.train()
+                    for i, batch in enumerate(train_loader, start=1):
+                        tokens = batch['tokens'].to(device)
+                        pos_tokens = batch['pos_tokens'].to(device)
+                        labels = batch['label'].to(device)
+
+                        optimizer.zero_grad()
+                        outputs = model(tokens, pos_tokens).to(device)
+
+                        loss = criterion(outputs, labels)
+                        loss.backward()
+                        optimizer.step()
+
+                        epoch_loss += loss.item()
+
+                        #if i % 10 == 0:
+                        #    print(f"Epoch [{epoch+1}], Step [{i}], Loss: {loss.item():.4f}", flush=True)
+
+                    ## Val loss
+                    model.eval()
+                    with torch.no_grad():
+                        for batch in val_loader:
+                            tokens = batch['tokens'].to(device)
+                            pos_tokens = batch['pos_tokens'].to(device)
+                            labels = batch['label'].to(device)
+
+                            outputs = model(tokens, pos_tokens).to(device)
+                            val_loss = criterion(outputs, labels)
+
+                            epoch_val_loss += val_loss.item()
+
+                    print(f'Epoch {epoch+1}, Loss: {epoch_loss}, Val Loss: {epoch_val_loss}', flush=True)
+                    
+                    if epoch_val_loss < min_val_loss:
+                        min_val_loss = epoch_val_loss
+                        patience = 5
+                    else:
+                        if epoch > 10:
+                            patience -= 1
+                            if patience == 0:
+                                break
 
 
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch in test_loader:
-            inputs = batch['input']
-            labels = batch['label']
-            outputs = model(inputs).squeeze()
-            predictions = (outputs > 0.5).float()
-            correct += (predictions == labels).sum().item()
-            total += labels.size(0)
+                """model.eval()
+                correct = 0
+                total = 0
+                with torch.no_grad():
+                    for batch in val_loader:
+                        tokens = batch['tokens']
+                        pos_tokens = batch['pos_tokens']
+                        labels = batch['label']
 
-    print(f'Test Accuracy: {correct / total * 100:.2f}%')
+                        outputs = model(tokens)
+
+                        predictions = (outputs > 0.5).float()
+                        correct += (predictions == labels).sum().item()
+                        total += labels.size(0)
+
+                print(f'Test Accuracy: {correct / total * 100:.2f}%')"""
 
 def main():
     train()

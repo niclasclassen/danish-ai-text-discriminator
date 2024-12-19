@@ -17,11 +17,9 @@ def get_embs():
     w2v = KeyedVectors.load_word2vec_format(w2v_path, binary=True, unicode_errors='ignore')
     unk_vector = np.random.uniform(-0.01, 0.01, w2v.vector_size)
     unk_id = w2v.add_vector('<UNK>', unk_vector)
-    padding_vector = np.random.uniform(-0.01, 0.01, w2v.vector_size)
-    pad_id = w2v.add_vector('<PAD>', padding_vector)
     embedding = nn.Embedding.from_pretrained(torch.FloatTensor(w2v.vectors))
     vocab = {word: idx for idx, word in enumerate(w2v.index_to_key)}
-    return embedding, vocab, unk_id, pad_id
+    return embedding, vocab, unk_id
 
 def get_pos_embs(df):
     # Load the Danish spaCy model
@@ -44,7 +42,7 @@ def get_pos_embs(df):
         unique_pos_tags = extract_unique_pos_tags(row['Text'], unique_pos_tags)
 
     # Convert the set to a sorted list
-    unique_pos_tags_list = sorted(list(unique_pos_tags))
+    unique_pos_tags_list = sorted(list(unique_pos_tags)) + ['PAD']
 
     # Print the result
     #print("Unique POS Tags:", unique_pos_tags_list)
@@ -64,4 +62,6 @@ def get_pos_embs(df):
     # Map POS tags to corresponding row indices in the embedding table
     pos_embedding_mapping = {tag: int(np.argmax(encoded_pos_tags[idx])) for idx, tag in enumerate(unique_pos_tags_list)}
     
+    print(embedding)
+
     return embedding, pos_embedding_mapping, len(standard_pos_tags)-2, len(standard_pos_tags)-1
