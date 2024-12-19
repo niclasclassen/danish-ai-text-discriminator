@@ -56,11 +56,11 @@ def get_pos_embs(df):
 
     # One-Hot Encode POS tags
     one_hot_encoder = OneHotEncoder(categories=[standard_pos_tags], sparse_output=False)
-    encoded_pos_tags = one_hot_encoder.fit_transform(np.array(unique_pos_tags_list).reshape(-1, 1))
+    encoded_pos_tags = one_hot_encoder.fit_transform(np.array(standard_pos_tags).reshape(-1, 1))
     embedding = nn.Embedding.from_pretrained(torch.FloatTensor(encoded_pos_tags))
 
     # Map POS tags to corresponding row indices in the embedding table
-    pos_embedding_mapping = {tag: int(np.argmax(encoded_pos_tags[idx])) for idx, tag in enumerate(unique_pos_tags_list)}
+    pos_embedding_mapping = {tag: int(np.argmax(encoded_pos_tags[idx])) for idx, tag in enumerate(standard_pos_tags)}
     
     print(embedding)
 

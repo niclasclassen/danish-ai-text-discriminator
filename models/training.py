@@ -7,6 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, recall_score, f1_score
 from collections import Counter
 from itertools import chain
 from gensim.models import KeyedVectors
@@ -14,6 +15,7 @@ import pdb
 from dataloading.dataset import TextDataset
 from models.lstm import LSTMClassifier
 from embs import get_embs, get_pos_embs
+import json
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("IS CUDA?", torch.cuda.is_available(), flush=True)
@@ -49,7 +51,7 @@ def load_data():
     ai_df = data[["Rewritten Text"]]
     ai_df["label"] = 1
     ai_df2 = data[["Generated Text"]]
-    ai_df2["label"] = 1
+    ai_df2["label"] = 2
     human_df = human_df.rename(columns={"Combined Text": "Text"})
     ai_df = ai_df.rename(columns={"Rewritten Text": "Text"})
     ai_df2 = ai_df2.rename(columns={"Generated Text": "Text"})
@@ -63,14 +65,16 @@ def train(pos_emb, mode):
     max_len = 2000
     tokenizer = Tokenizer(vocab, unk_id, pos_vocab, pos_unk_id, pos_pad_id, max_len)
 
-    data = data.sample(frac=1).reset_index(drop=True)
-    train_texts, test_texts, train_labels, test_labels = train_test_split(data["Text"], data["label"], test_size=0.2, random_state=42, stratify=data["label"])    
-    train_texts, val_texts, train_labels, val_labels = train_test_split(train_texts, train_labels, test_size=0.2, random_state=42, stratify=train_labels)
+    data = data.sample(frac=1, random_state=42).reset_index(drop=True)
+    all_train_texts, test_texts, all_train_labels, test_labels = train_test_split(data["Text"], data["label"], test_size=0.2, random_state=42, stratify=data["label"])    
+    train_texts, val_texts, train_labels, val_labels = train_test_split(all_train_texts, all_train_labels, test_size=0.2, random_state=42, stratify=all_train_labels)
 
+    all_train_dataset = TextDataset(all_train_texts.tolist(), all_train_labels.tolist(), tokenizer)
     train_dataset = TextDataset(train_texts.tolist(), train_labels.tolist(), tokenizer)
     val_dataset = TextDataset(val_texts.tolist(), val_labels.tolist(), tokenizer)
     test_dataset = TextDataset(test_texts.tolist(), test_labels.tolist(), tokenizer)
 
+    all_train_loader = DataLoader(all_train_dataset, batch_size=32, shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
@@ -117,6 +121,9 @@ def train(pos_emb, mode):
                         tokens = batch['tokens'].to(device)
                         pos_tokens = batch['pos_tokens'].to(device)
                         labels = batch['label'].to(device)
+                        print(labels)
+                        labels = torch.where(labels == 2, torch.tensor(1), labels)
+                        print(labels)
 
                         optimizer.zero_grad()
                         outputs = model(tokens, pos_tokens).to(device)
@@ -154,23 +161,97 @@ def train(pos_emb, mode):
                             if patience == 0:
                                 break
     else:
-        pass
-        """model.eval()
-        correct = 0
-        total = 0
+
+        print("** STARTING FINAL TRAIN **")
+
+        if pos_emb:
+            json_filename = "pos_config.json"
+        else:
+            json_filename = "baseline_config.json"
+
+        with open(json_filename, 'r') as f:
+            config = json.load(f)
+
+        hidden_dim = config['hidden_dim']
+        lr = config['lr']
+        epoch = config['epoch']
+
+        print("Parameters:")
+        print("hidden dim:", hidden_dim)
+        print("LR:", lr)
+        print("Epochs:", epoch)
+
+        if pos_emb:
+            model = LSTMClassifier(vocab_size, embedding, hidden_dim, output_dim, n_layers, dropout, pos=True, pos_emb=pos_embedding)
+        else:
+            model = LSTMClassifier(vocab_size, embedding, hidden_dim, output_dim, n_layers, dropout, pos=False, pos_emb=pos_embedding)
+        model = model.to(device)
+        print(model)
+
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+
+        for epoch in range(epoch):
+            model.train()
+
+            epoch_train_loss = 0.0
+            for i, batch in enumerate(all_train_loader, start=1):
+                tokens = batch['tokens'].to(device)
+                pos_tokens = batch['pos_tokens'].to(device)
+                labels = batch['label'].to(device)
+                binary_labels = torch.where(labels == 2, torch.tensor(1), labels)
+
+                optimizer.zero_grad()
+                outputs = model(tokens, pos_tokens).to(device)
+                loss = criterion(outputs, binary_labels)
+                loss.backward()
+                optimizer.step()
+
+                epoch_train_loss += loss.item()
+
+            print(f'Epoch {epoch+1}, Train Loss: {epoch_train_loss}', flush=True)
+
+        ## Test
+        model.eval()
+        total_test_loss = 0.0
+        all_binary_labels = []
+        all_labels = []
+        all_predictions = []
         with torch.no_grad():
-            for batch in val_loader:
-                tokens = batch['tokens']
-                pos_tokens = batch['pos_tokens']
-                labels = batch['label']
+            for batch in test_loader:
+                tokens = batch['tokens'].to(device)
+                pos_tokens = batch['pos_tokens'].to(device)
+                labels = batch['label'].to(device)
+                binary_labels = torch.where(labels == 2, torch.tensor(1), labels)
 
-                outputs = model(tokens)
+                outputs = model(tokens, pos_tokens).to(device)
+                test_loss = criterion(outputs, binary_labels)
 
-                predictions = (outputs > 0.5).float()
-                correct += (predictions == labels).sum().item()
-                total += labels.size(0)
+                total_test_loss += test_loss.item()
 
-        print(f'Test Accuracy: {correct / total * 100:.2f}%')"""
+                # probs to labels
+                #preds = (outputs > 0.5).long()
+                all_predictions.extend(outputs.cpu().tolist())
+                all_labels.extend(labels.cpu().tolist())
+                all_binary_labels.extend(binary_labels.cpu().tolist())
+
+        results_df = pd.DataFrame({
+            "label": all_binary_labels,
+            "predicted": all_predictions,
+            "written": all_labels
+        })
+
+        if pos_emb:
+            results_df.to_csv("results_pos.csv")
+        else:
+            results_df.to_csv("results_baseline.csv")
+
+        # Compute metrics after iterating over all batches
+        """precision = precision_score(all_labels, all_predictions)
+        recall = recall_score(all_labels, all_predictions)
+        f1 = f1_score(all_labels, all_predictions)
+        avg_test_loss = total_test_loss / test_loader.__len__()
+
+        print(f'Test Metrics, average loss: {avg_test_loss:.2f}, precision {precision:.2f}, recall {recall:.2f}, f1 {f1:.2f}')"""
 
 def main():
     pos = sys.argv[1]
