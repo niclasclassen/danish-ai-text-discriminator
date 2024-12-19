@@ -49,6 +49,8 @@ class LSTMClassifier(nn.Module):
             #print(hidden_pos.shape)
             hidden = torch.concat([hidden, hidden_pos], dim=1)
 
+        print(hidden.shape)
+
         #print(hidden.shape)
         hidden = self.dropout(hidden)
         hidden = self.fc(hidden)

@@ -43,17 +43,20 @@ class Tokenizer:
 def load_data():
     #data = pd.read_csv("../cleaned_final.csv")
     #data = pd.read_csv("../cleaned_final_title_based.csv")
-    data = pd.read_csv("../combined_file.csv")
+    data = pd.read_csv("../combined_file_final.csv", sep=";")
     human_df = data[["Combined Text"]]
     human_df["label"] = 0
     ai_df = data[["Rewritten Text"]]
     ai_df["label"] = 1
+    ai_df2 = data[["Generated Text"]]
+    ai_df2["label"] = 1
     human_df = human_df.rename(columns={"Combined Text": "Text"})
     ai_df = ai_df.rename(columns={"Rewritten Text": "Text"})
-    data = pd.concat([human_df, ai_df], ignore_index=True)
+    ai_df2 = ai_df2.rename(columns={"Generated Text": "Text"})
+    data = pd.concat([human_df, ai_df, ai_df2], ignore_index=True)
     return data
 
-def train():
+def train(pos_emb, mode):
     data = load_data()
     embedding, vocab, unk_id = get_embs()
     pos_embedding, pos_vocab, pos_unk_id, pos_pad_id = get_pos_embs(data)
@@ -83,9 +86,9 @@ def train():
     pos_weight = torch.tensor([1/2]).to(device)
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="sum")
 
-    for hidden_dim in [16,32,64]:
-        for lr in [0.0001, 0.0005, 0.001]:
-            for pos_emb in [True, False]:
+    if mode == "hyp":
+        for hidden_dim in [16,32,64]:
+            for lr in [0.0001, 0.0005, 0.001]:
 
                 print("** PARAMETERS **", flush=True)
                 print("Hidden:", hidden_dim, flush=True)
@@ -150,27 +153,33 @@ def train():
                             patience -= 1
                             if patience == 0:
                                 break
+    else:
+        pass
+        """model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                tokens = batch['tokens']
+                pos_tokens = batch['pos_tokens']
+                labels = batch['label']
 
+                outputs = model(tokens)
 
-                """model.eval()
-                correct = 0
-                total = 0
-                with torch.no_grad():
-                    for batch in val_loader:
-                        tokens = batch['tokens']
-                        pos_tokens = batch['pos_tokens']
-                        labels = batch['label']
+                predictions = (outputs > 0.5).float()
+                correct += (predictions == labels).sum().item()
+                total += labels.size(0)
 
-                        outputs = model(tokens)
-
-                        predictions = (outputs > 0.5).float()
-                        correct += (predictions == labels).sum().item()
-                        total += labels.size(0)
-
-                print(f'Test Accuracy: {correct / total * 100:.2f}%')"""
+        print(f'Test Accuracy: {correct / total * 100:.2f}%')"""
 
 def main():
-    train()
+    pos = sys.argv[1]
+    mode = sys.argv[2]
+    if pos == "True":
+        pos_emb = True
+    else:
+        pos_emb = False
+    train(pos_emb=pos_emb, mode=mode)
 
 if __name__ == "__main__":
     main()
