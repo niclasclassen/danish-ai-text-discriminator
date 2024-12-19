@@ -11,12 +11,10 @@ from gensim.models import KeyedVectors
 
 
 class TextDataset(Dataset):
-    def __init__(self, texts, labels, tokenizer, max_len, pad_id):
+    def __init__(self, texts, labels, tokenizer):
         self.texts = texts
         self.labels = labels
         self.tokenizer = tokenizer
-        self.max_len = max_len
-        self.pad_id = pad_id
 
     def __len__(self):
         return len(self.texts)
@@ -25,18 +23,11 @@ class TextDataset(Dataset):
         text = self.texts[idx]
         label = self.labels[idx]
 
-        tokens = self.tokenizer(text)
-        length = len(tokens)
-
-        padded_tokens = (
-            tokens + [self.pad_id] * (self.max_len - len(tokens))
-            if len(tokens) < self.max_len
-            else tokens[: self.max_len]
-        )
+        tokens, pos_tokens = self.tokenizer.tokenize(text)
 
         return {
-            "input": torch.tensor(padded_tokens, dtype=torch.long),
-            "length": torch.tensor(length, dtype=torch.long),
+            "tokens": torch.tensor(tokens, dtype=torch.long),
+            "pos_tokens": torch.tensor(pos_tokens, dtype=torch.long),
             "label": torch.tensor(label, dtype=torch.float),
         }
 

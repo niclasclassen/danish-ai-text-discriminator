@@ -30,7 +30,7 @@ class LSTMClassifier(nn.Module):
         lstm_dim = hidden_dim
         self.embedding = emb_layer
         self.lstm = nn.LSTM(
-            emb_dim[1],
+            emb_dim,
             hidden_dim,
             num_layers=n_layers,
             batch_first=True,
