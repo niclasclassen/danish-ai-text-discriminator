@@ -6,10 +6,10 @@ We use real posts on Reddit and a generative AI model (LLaMA) to generate human 
 
 ## To run the code
 
-Run the */models/training.py* script followed by two command arguments:
-- 1: True/False (Whether to use POS model or baseline, True for POS model)
+Run the `/models/training.py` script followed by two command arguments:
+- 1: "True/False" (Whether to use POS model or baseline, True for POS model)
 - 2: "hyp" for hyperparameter tuning, else it will do the final training using config files.
 
 E.g.: 
 For final training of POS model:
-*python training.py True train*
+`python training.py True train`
